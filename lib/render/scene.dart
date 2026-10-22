@@ -23,13 +23,13 @@ class ScenePainter {
       crestDark: Palette.crestRedDark,
     );
     _botPainter = WarriorPainter(
-      shieldRadius: 0.68,
+      shieldRadius: 0.65,
       device: ShieldDevice.lambda,
       crestColor: Palette.cream,
       crestLight: Palette.creamBright,
       crestDark: Palette.creamDim,
-      shieldHandBias: const Vec2(0, 0.20),
-      shieldCenterOffset: const Vec2(0.20, 0.10),
+      shieldHandBias: const Vec2(0.04, -0.09),
+      shieldCenterOffset: const Vec2(0.25, 0.02),
       stanceBackBias: -0.10,
     );
   }

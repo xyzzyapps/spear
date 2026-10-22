@@ -61,4 +61,13 @@
 - [x] Write `SPEC.md` with architecture, rules, state machines, timings, dimensions, and verification
 - [x] Write `README.md` with local development, build, deploy, controls, and X Player Card instructions
 - [x] Update `TODO.md` and prepare the final summary
-- [ ] Commit the completed work (waiting for the user's end-of-session signal)
+
+## Visual, Mechanics & Kinematics Overhaul
+- [x] Phase 1: Anatomical silhouette & papercut visual redesign (helmet, sweeping crest plume, contoured musculature, bronze greaves, feet, pteruges)
+- [x] Phase 2: Neck articulation mechanics (organic dynamic bezier neck linking shoulders to helmet that flexes with head tilt and body lean)
+- [x] Phase 3: Spear mechanics & combat kinematics overhaul (authentic overhand dory thrust arc, rotational shoulder drive, shaft sliding dynamics, impact vibration)
+- [x] Phase 4: Arms mechanics & IK articulation (anatomical limb contours, natural fist gripping the spear shaft, articulated shield arm bracing)
+- [x] Phase 5: Leg mechanics & footwork gait overhaul (athletic hoplite martial stance, anatomical thigh/greave curves, heel-toe roll locomotion, dynamic lunge and recoil footwork)
+- [x] Phase 6: Verification, testing (pose unit tests, dart analyze, tool/test.dart, tool/build.dart, tool/check.dart), update SPEC.md and README.md
+- [x] Draw the warrior's spear tip behind their own shield and align the bot's Lambda shield so the spear peeks from behind the upper shield rim
+- [x] Commit the completed work (waiting for the user's end-of-session signal)

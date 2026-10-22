@@ -95,4 +95,17 @@ void runPoseTests() {
     expectClose(middle.torsoShift, 0.5);
     expectClose(middle.frontFootRot, 0.25);
   });
+
+  test('walk cycle adds vertical hip bob and stance push-off roll', () {
+    final walker = fighter()
+      ..state = FighterState.walk
+      ..moveDir = 1
+      ..walkCycle = 0.25 * 2 * math.pi;
+    final pose = poseFor(walker, 0);
+    expectTrue(pose.bob > 0.01, reason: 'single-support phase should bob up');
+    expectTrue(
+      pose.backFootRot != 0 || pose.frontFootRot != 0,
+      reason: 'feet should articulate during stride',
+    );
+  });
 }

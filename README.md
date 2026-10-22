@@ -204,10 +204,14 @@ Append these to the page URL:
 - The visual is a papercut interpretation of `design/ref.png`, not a pixel
   trace. The top and bottom friezes are procedural canvas textures.
 - The spear is held in the overhand dory grip: palm over the shaft, pinky
-  toward the tip. The spear hand is the reachable IK end with a wrist, fist,
-  finger ridges, and thumb; the off-hand shield arm is a second joint chain.
-- The neck is a visible brown column with a black gorget and cream collar
-  between the torso and helmet.
+  toward the tip, with an anatomical back-arm IK solver that keeps the elbow on
+  the lower-posterior side and drives the spear shaft across the opposing
+  shield on the thrust.
+- The neck is an articulated bezier column connecting the shoulder collar to
+  the Corinthian helmet nape and throat, flexing naturally with head tilts.
+- Both knees bend forward with sculpted thigh musculature, contoured bronze
+  greaves (knemides) with cream knee loops, and heeled feet that roll from heel
+  to ball during the stride.
 - Hits draw blood: crimson droplets, a shield splat, a stain on the spear leaf,
   a short red screen flash, and blood-red empty HUD pips.
 - Motion is procedural: a low planted-foot advance with weight transfer, a

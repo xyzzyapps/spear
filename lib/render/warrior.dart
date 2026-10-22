@@ -17,7 +17,7 @@ class WarriorPainter {
     required this.crestLight,
     required this.crestDark,
     this.shieldHandBias = Vec2.zero,
-    this.shieldCenterOffset = const Vec2(0.25, 0.08),
+    this.shieldCenterOffset = const Vec2(0.25, 0.03),
     this.stanceBackBias = 0,
   });
 
@@ -34,20 +34,35 @@ class WarriorPainter {
 
   void draw(CanvasRenderingContext2D ctx, Fighter fighter, PoseParams pose) {
     _facing = fighter.facing;
-    final hipY = 1.15 - pose.crouch;
-    final backHip = Vec2(-0.18, hipY);
-    final frontHip = Vec2(0.02, hipY);
-    final shoulder = Vec2(0, hipY + 0.87);
-    final headCenter = Vec2(0.08, hipY + 1.57);
-    final spearHand = shoulder + pose.spearHandOffset;
-    final shieldHand = shoulder + pose.shieldHandOffset + shieldHandBias;
+    final hipY = 1.06 - pose.crouch;
+    final backHip = Vec2(-0.16, hipY);
+    final frontHip = Vec2(0.06, hipY);
+    final shoulder = Vec2(-0.04, hipY + 0.78);
+    final shieldShoulder = Vec2(0.08, hipY + 0.76);
+    final headCenter = Vec2(0.06, hipY + 1.24);
+
+    // Map pose.spearHandOffset (which stays > 0.5 in y for overhand stance)
+    // into the anatomical back-arm target so the elbow bends down and back
+    // and the fist drives up to the temple without crossing the shield.
+    final handDx = pose.spearHandOffset.x > -0.35
+        ? -0.30 + (pose.spearHandOffset.x + 0.35) * 0.52
+        : pose.spearHandOffset.x + 0.05;
+    final spearHandTarget =
+        shoulder + Vec2(handDx, pose.spearHandOffset.y - 0.24);
+    final shieldHand = shieldShoulder + pose.shieldHandOffset + shieldHandBias;
     final shieldCenter =
         shieldHand + shieldCenterOffset.rotate(pose.shieldTilt);
-    final spearAngle = 0.095 + pose.spearTilt;
-    final spearArm = solveTwoBone(shoulder, spearHand, 0.34, 0.44, -1);
+    // In windup (pose.spearTilt > 0), the raised hand cocks the spear so the
+    // point aims slightly downward over the opposing shield rim rather than up
+    // into the warrior's own crest.
+    final spearAngle = 0.085 - pose.spearTilt * 0.28;
+    final effectiveSlide = pose.spearSlide < 0
+        ? pose.spearSlide * 0.35
+        : pose.spearSlide;
+    final spearArm = _solveSpearArm(shoulder, spearHandTarget, 0.38, 0.44);
     final actualSpearHand = spearArm.end;
-    // Overhand grip: the palm sits over the shaft, not under it.
-    final grip = actualSpearHand + const Vec2(0, -0.02);
+    // Overhand grip: the palm wraps over the shaft.
+    final grip = actualSpearHand + const Vec2(0, -0.015);
 
     final rootX = 800 + fighter.x * 100 + fighter.facing * pose.lunge * 100;
     final groundY = 673 - pose.bob * 100;
@@ -57,11 +72,12 @@ class WarriorPainter {
     ctx.scale(fighter.facing * 100, -100);
     ctx.rotate(pose.rootRot);
 
+    // Both human knees bend forward (+1).
     _drawLeg(
       ctx,
       backHip,
       pose.backFoot + Vec2(stanceBackBias, 0),
-      -1,
+      1,
       pose.backFootRot,
     );
     _drawLeg(ctx, frontHip, pose.frontFoot, 1, pose.frontFootRot);
@@ -69,29 +85,38 @@ class WarriorPainter {
     ctx.save();
     _bodyTransform(ctx, hipY, pose.bodyLean, pose.torsoShift);
 
-    // Off-hand shield arm, mostly hidden behind the shield and torso.
-    _drawArm(ctx, shoulder, shieldHand, 0.34, 0.34, -1);
-    _drawTorso(ctx, hipY);
-    _drawPteruges(ctx, hipY);
+    // Off-hand shield arm behind torso and shield.
+    _drawShieldArm(ctx, shieldShoulder, shieldHand, shieldCenter);
+    // Sword scabbard hangs from the waist behind the hip.
     _drawSword(ctx, hipY);
-    _drawNeck(ctx, hipY);
+    _drawPteruges(ctx, hipY, pose.bodyLean);
+    _drawTorso(ctx, hipY, shoulder);
+    // Spear shaft and tip pass behind the warrior's own helmet and shield so
+    // the bot's spear sits behind its Lambda shield.
+    _drawSpearShaft(ctx, grip, spearAngle, effectiveSlide);
+    _drawSpearTip(ctx, grip, spearAngle, effectiveSlide, fighter.bloodyTip);
+    _drawNeck(ctx, shoulder, headCenter, pose);
     _drawHead(ctx, headCenter, pose);
-    _drawSpearShaft(ctx, grip, spearAngle, pose.spearSlide);
     _drawShield(ctx, shieldCenter, pose, fighter.wounded);
-    _drawArm(
-      ctx,
-      shoulder,
-      actualSpearHand,
-      0.34,
-      0.44,
-      -1,
-      handAngle: spearAngle,
-      grip: true,
-    );
-    _drawSpearTip(ctx, grip, spearAngle, pose.spearSlide, fighter.bloodyTip);
+    _drawSpearArm(ctx, shoulder, spearArm.joint, actualSpearHand, spearAngle);
     ctx.restore();
 
     ctx.restore();
+  }
+
+  /// Solves the two-bone IK for the spear arm while keeping the elbow on the
+  /// anatomical lower-posterior side so it never flips above the shoulder.
+  IkResult _solveSpearArm(
+    Vec2 shoulder,
+    Vec2 target,
+    double upperLength,
+    double lowerLength,
+  ) {
+    final posA = solveTwoBone(shoulder, target, upperLength, lowerLength, 1);
+    final posB = solveTwoBone(shoulder, target, upperLength, lowerLength, -1);
+    final scoreA = posA.joint.y + 0.35 * posA.joint.x;
+    final scoreB = posB.joint.y + 0.35 * posB.joint.x;
+    return scoreA <= scoreB ? posA : posB;
   }
 
   void _bodyTransform(
@@ -113,51 +138,127 @@ class WarriorPainter {
     double bend,
     double footRot,
   ) {
-    final ik = solveTwoBone(hip, foot, 0.60, 0.64, bend);
+    final ik = solveTwoBone(hip, foot, 0.55, 0.57, bend);
     final knee = ik.joint;
     final ankle = ik.end;
 
-    _drawLimb(ctx, hip, knee, 0.16, 0.12, Palette.ink);
+    // 1. Sculpted anatomical thigh (quadriceps curve in front, hamstring in back).
+    final thighPath = _sculptedLimbPath(
+      hip,
+      knee,
+      startFront: 0.140,
+      startBack: 0.140,
+      midFront: 0.148,
+      midBack: 0.130,
+      endFront: 0.082,
+      endBack: 0.086,
+    );
+    _fillShadowed(ctx, thighPath, Palette.ink);
 
-    final greavePath = _limbPath(knee, ankle, 0.11, 0.075);
+    // 2. Foot is drawn before the greave cuff so the ankle trim overlaps cleanly.
+    _drawFoot(ctx, ankle, footRot);
+
+    // 3. Contoured Greek bronze greave (knemis) with calf bulge and knee-boss.
+    final shinDir = (ankle - knee).normalized;
+    final shinPerp = shinDir.perp;
+    final shinLen = (ankle - knee).length;
+
+    Vec2 pt(double along, double across) =>
+        knee + shinDir * (along * shinLen) + shinPerp * across;
+
+    final kneeBossTop = pt(-0.07, 0.048);
+    final shinTop = pt(0.02, 0.072);
+    final shinMid = pt(0.52, 0.060);
+    final ankleFront = pt(0.98, 0.050);
+    final ankleBack = pt(0.98, -0.052);
+    final achilles = pt(0.76, -0.058);
+    final calfBulge = pt(0.34, -0.112);
+    final kneeBack = pt(0.03, -0.080);
+
+    final greavePath = Path2D();
+    greavePath.moveTo(kneeBack.x, kneeBack.y);
+    greavePath.quadraticCurveTo(
+      knee.x + shinDir.x * -0.08,
+      knee.y + shinDir.y * -0.08,
+      kneeBossTop.x,
+      kneeBossTop.y,
+    );
+    greavePath.quadraticCurveTo(
+      pt(-0.02, 0.088).x,
+      pt(-0.02, 0.088).y,
+      shinTop.x,
+      shinTop.y,
+    );
+    greavePath.bezierCurveTo(
+      pt(0.25, 0.082).x,
+      pt(0.25, 0.082).y,
+      shinMid.x,
+      shinMid.y,
+      ankleFront.x,
+      ankleFront.y,
+    );
+    greavePath.lineTo(ankleBack.x, ankleBack.y);
+    greavePath.bezierCurveTo(
+      achilles.x,
+      achilles.y,
+      calfBulge.x,
+      calfBulge.y,
+      kneeBack.x,
+      kneeBack.y,
+    );
+    greavePath.closePath();
+
     ctx.save();
     ctx.translate(0.02 * _facing, -0.03);
     ctx.fillStyle = Palette.shadow;
     ctx.fill(greavePath);
     ctx.restore();
+
     final greaveGradient = ctx.createLinearGradient(
-      knee.x,
+      knee.x + shinPerp.x * 0.08,
       knee.y,
-      ankle.x,
+      ankle.x - shinPerp.x * 0.12,
       ankle.y,
     );
     greaveGradient.addColorStop(0, Palette.greaveLight);
-    greaveGradient.addColorStop(1, Palette.greave);
+    greaveGradient.addColorStop(0.65, Palette.greave);
+    greaveGradient.addColorStop(1, Palette.greaveDark);
     ctx.fillStyle = greaveGradient;
     ctx.fill(greavePath);
 
-    final d = (ankle - knee).normalized;
-    final p = d.perp;
-    ctx.strokeStyle = 'rgba(232, 170, 130, 0.26)';
-    ctx.lineWidth = 0.02;
-    ctx.beginPath();
-    ctx.moveTo(knee.x + p.x * 0.05, knee.y + p.y * 0.05);
-    ctx.lineTo(ankle.x + p.x * 0.032, ankle.y + p.y * 0.032);
-    ctx.stroke();
     ctx.strokeStyle = Palette.ink;
     ctx.lineWidth = 0.014;
+    ctx.stroke(greavePath);
+
+    // Cream anatomical knee-cap loop and front shin border matching design/ref.png
+    ctx.strokeStyle = Palette.cream;
+    ctx.lineWidth = 0.011;
     ctx.beginPath();
-    ctx.moveTo(knee.x + p.x * 0.11, knee.y + p.y * 0.11);
-    ctx.lineTo(ankle.x + p.x * 0.075, ankle.y + p.y * 0.075);
-    ctx.lineTo(ankle.x - p.x * 0.075, ankle.y - p.y * 0.075);
-    ctx.lineTo(knee.x - p.x * 0.11, knee.y - p.y * 0.11);
-    ctx.closePath();
+    final loopStart = pt(0.08, -0.035);
+    final loopTop = pt(-0.055, 0.045);
+    final loopFront = pt(0.04, 0.066);
+    final shinInnerBot = pt(0.95, 0.040);
+    ctx.moveTo(loopStart.x, loopStart.y);
+    ctx.quadraticCurveTo(
+      pt(-0.03, -0.02).x,
+      pt(-0.03, -0.02).y,
+      loopTop.x,
+      loopTop.y,
+    );
+    ctx.quadraticCurveTo(
+      pt(-0.01, 0.072).x,
+      pt(-0.01, 0.072).y,
+      loopFront.x,
+      loopFront.y,
+    );
+    ctx.lineTo(shinInnerBot.x, shinInnerBot.y);
     ctx.stroke();
 
-    _fillCircle(ctx, knee.x, knee.y, 0.11, Palette.ink);
-    _drawCrossBand(ctx, knee, ankle, 0.07, 0.11, Palette.cream, 0.016);
-    _drawCrossBand(ctx, ankle, knee, 0.025, 0.075, Palette.cream, 0.012);
-    _drawFoot(ctx, ankle, footRot);
+    // Subtle ankle rim highlight
+    ctx.beginPath();
+    ctx.moveTo(ankleBack.x, ankleBack.y);
+    ctx.lineTo(ankleFront.x, ankleFront.y);
+    ctx.stroke();
   }
 
   void _drawFoot(CanvasRenderingContext2D ctx, Vec2 ankle, double rotation) {
@@ -166,64 +267,72 @@ class WarriorPainter {
     ctx.rotate(rotation);
     ctx.translate(-ankle.x, -ankle.y);
 
+    final heelX = ankle.x - 0.075;
+    final toeX = ankle.x + 0.235;
+    const soleY = 0.022;
+    const instepY = 0.095;
+
     final path = Path2D();
-    path.moveTo(ankle.x - 0.06, 0.10);
-    path.lineTo(ankle.x + 0.19, 0.10);
-    path.quadraticCurveTo(ankle.x + 0.27, 0.10, ankle.x + 0.26, 0.04);
-    path.lineTo(ankle.x - 0.06, 0.04);
+    path.moveTo(ankle.x - 0.055, instepY);
+    path.quadraticCurveTo(heelX - 0.015, 0.055, heelX, soleY);
+    path.lineTo(ankle.x - 0.01, soleY);
+    path.quadraticCurveTo(ankle.x + 0.04, soleY + 0.008, ankle.x + 0.10, soleY);
+    path.lineTo(toeX - 0.02, soleY);
+    path.quadraticCurveTo(toeX + 0.015, soleY + 0.018, toeX - 0.01, 0.050);
+    path.quadraticCurveTo(ankle.x + 0.11, 0.072, ankle.x + 0.045, instepY);
     path.closePath();
     _fillShadowed(ctx, path, Palette.ink);
-
-    ctx.strokeStyle = Palette.cream;
-    ctx.lineWidth = 0.012;
-    ctx.beginPath();
-    ctx.moveTo(ankle.x - 0.035, 0.105);
-    ctx.lineTo(ankle.x + 0.035, 0.105);
-    ctx.stroke();
 
     ctx.restore();
   }
 
   void _drawSword(CanvasRenderingContext2D ctx, double hipY) {
-    final a = Vec2(-0.12, hipY + 0.08);
-    final b = Vec2(-0.48, hipY - 0.50);
+    final a = Vec2(-0.06, hipY + 0.06);
+    final b = Vec2(-0.42, hipY - 0.42);
     final d = (b - a).normalized;
     final p = d.perp;
     final path = Path2D();
-    path.moveTo(a.x + p.x * 0.06, a.y + p.y * 0.06);
-    path.lineTo(b.x + p.x * 0.05, b.y + p.y * 0.05);
-    path.lineTo(b.x + d.x * 0.10, b.y + d.y * 0.10);
-    path.lineTo(b.x - p.x * 0.05, b.y - p.y * 0.05);
-    path.lineTo(a.x - p.x * 0.06, a.y - p.y * 0.06);
+    path.moveTo(a.x + p.x * 0.048, a.y + p.y * 0.048);
+    path.lineTo(b.x + p.x * 0.038, b.y + p.y * 0.038);
+    path.lineTo(b.x + d.x * 0.085, b.y + d.y * 0.085);
+    path.lineTo(b.x - p.x * 0.038, b.y - p.y * 0.038);
+    path.lineTo(a.x - p.x * 0.048, a.y - p.y * 0.048);
     path.closePath();
-    _fillShadowed(ctx, path, Palette.tunicDark);
-
-    _fillCircle(ctx, a.x, a.y, 0.055, Palette.ink);
+    _fillShadowed(ctx, path, Palette.tunic);
     ctx.strokeStyle = Palette.ink;
-    ctx.lineWidth = 0.03;
-    ctx.beginPath();
-    ctx.moveTo(a.x - p.x * 0.10, a.y - p.y * 0.10);
-    ctx.lineTo(a.x + p.x * 0.10, a.y + p.y * 0.10);
-    ctx.stroke();
+    ctx.lineWidth = 0.012;
+    ctx.stroke(path);
 
+    // Cream scabbard chape binding near the tip
     ctx.strokeStyle = Palette.cream;
     ctx.lineWidth = 0.012;
-    final bandCenter = b + d * -0.10;
+    final bandCenter = b + d * -0.07;
     ctx.beginPath();
-    ctx.moveTo(bandCenter.x + p.x * 0.055, bandCenter.y + p.y * 0.055);
-    ctx.lineTo(bandCenter.x - p.x * 0.055, bandCenter.y - p.y * 0.055);
+    ctx.moveTo(bandCenter.x + p.x * 0.042, bandCenter.y + p.y * 0.042);
+    ctx.lineTo(bandCenter.x - p.x * 0.042, bandCenter.y - p.y * 0.042);
+    ctx.stroke();
+
+    final upperBand = a + d * 0.14;
+    ctx.beginPath();
+    ctx.moveTo(upperBand.x + p.x * 0.046, upperBand.y + p.y * 0.046);
+    ctx.lineTo(upperBand.x - p.x * 0.046, upperBand.y - p.y * 0.046);
     ctx.stroke();
   }
 
-  void _drawTorso(CanvasRenderingContext2D ctx, double hipY) {
+  void _drawTorso(CanvasRenderingContext2D ctx, double hipY, Vec2 shoulder) {
     final path = Path2D();
-    path.moveTo(-0.23, hipY);
-    path.lineTo(-0.28, hipY + 0.55);
-    path.quadraticCurveTo(-0.26, hipY + 0.80, -0.11, hipY + 0.88);
-    path.lineTo(0.10, hipY + 0.90);
-    path.quadraticCurveTo(0.25, hipY + 0.86, 0.27, hipY + 0.66);
-    path.lineTo(0.22, hipY + 0.10);
-    path.lineTo(0.14, hipY);
+    path.moveTo(-0.20, hipY + 0.02);
+    path.bezierCurveTo(
+      -0.23,
+      hipY + 0.28,
+      -0.27,
+      hipY + 0.56,
+      -0.18,
+      hipY + 0.82,
+    );
+    path.quadraticCurveTo(-0.08, hipY + 0.92, 0.08, hipY + 0.90);
+    path.quadraticCurveTo(0.22, hipY + 0.84, 0.24, hipY + 0.62);
+    path.bezierCurveTo(0.22, hipY + 0.38, 0.19, hipY + 0.18, 0.17, hipY + 0.02);
     path.closePath();
 
     ctx.save();
@@ -232,62 +341,143 @@ class WarriorPainter {
     ctx.fill(path);
     ctx.restore();
 
-    final gradient = ctx.createLinearGradient(0, hipY, 0, hipY + 0.90);
+    final gradient = ctx.createLinearGradient(-0.20, hipY, 0.22, hipY + 0.90);
     gradient.addColorStop(0, Palette.tunicLight);
-    gradient.addColorStop(1, Palette.tunic);
+    gradient.addColorStop(0.7, Palette.tunic);
+    gradient.addColorStop(1, Palette.tunicDark);
     ctx.fillStyle = gradient;
     ctx.fill(path);
 
-    final chest = Path2D();
-    chest.moveTo(-0.13, hipY + 0.90);
-    chest.quadraticCurveTo(0.06, hipY + 0.94, 0.23, hipY + 0.84);
-    chest.lineTo(0.25, hipY + 0.66);
-    chest.quadraticCurveTo(0.13, hipY + 0.58, 0.06, hipY + 0.62);
-    chest.lineTo(-0.02, hipY + 0.80);
-    chest.closePath();
-    ctx.fillStyle = Palette.ink;
-    ctx.fill(chest);
+    ctx.strokeStyle = Palette.ink;
+    ctx.lineWidth = 0.013;
+    ctx.stroke(path);
 
-    final belt = _roundedRectPath(-0.27, hipY + 0.02, 0.54, 0.08, 0.02);
+    // Dark chest/armhole plate and cream trim matching design/ref.png
+    final armhole = Path2D();
+    armhole.moveTo(-0.14, hipY + 0.85);
+    armhole.quadraticCurveTo(0.04, hipY + 0.91, 0.18, hipY + 0.80);
+    armhole.lineTo(0.21, hipY + 0.62);
+    armhole.quadraticCurveTo(0.08, hipY + 0.56, -0.04, hipY + 0.64);
+    armhole.quadraticCurveTo(-0.16, hipY + 0.72, -0.14, hipY + 0.85);
+    armhole.closePath();
+    ctx.fillStyle = Palette.ink;
+    ctx.fill(armhole);
+
+    // Cream shoulder cutout ring
+    ctx.strokeStyle = Palette.cream;
+    ctx.lineWidth = 0.011;
+    ctx.beginPath();
+    ctx.arc(shoulder.x + 0.02, shoulder.y - 0.01, 0.095, -1.2, 2.3, false);
+    ctx.stroke();
+
+    // Anatomical cuirass waist line and front boss fastener
+    _fillCircle(ctx, 0.16, hipY + 0.18, 0.028, Palette.cream, shadow: false);
+    _fillCircle(ctx, 0.16, hipY + 0.18, 0.010, Palette.ink, shadow: false);
+
+    // Segmented waist belt
+    final belt = _roundedRectPath(-0.22, hipY - 0.01, 0.41, 0.075, 0.018);
     ctx.fillStyle = Palette.tunicDark;
     ctx.fill(belt);
-    _fillCircle(ctx, 0.24, hipY + 0.10, 0.035, Palette.cream, shadow: false);
-  }
+    ctx.strokeStyle = Palette.ink;
+    ctx.lineWidth = 0.012;
+    ctx.stroke(belt);
 
-  void _drawPteruges(CanvasRenderingContext2D ctx, double hipY) {
-    for (var i = 0; i < 7; i++) {
-      final x = -0.36 + i * 0.112;
-      final path = _roundedRectPath(x, hipY - 0.40, 0.085, 0.44, 0.012);
-      _fillShadowed(ctx, path, Palette.cream);
+    for (var i = 0; i < 5; i++) {
+      final bx = -0.16 + i * 0.075;
+      ctx.beginPath();
+      ctx.moveTo(bx, hipY - 0.01);
+      ctx.lineTo(bx + 0.02, hipY + 0.065);
+      ctx.stroke();
     }
   }
 
-  void _drawNeck(CanvasRenderingContext2D ctx, double hipY) {
-    final path = Path2D();
-    path.moveTo(-0.10, hipY + 0.84);
-    path.lineTo(0.10, hipY + 0.84);
-    path.lineTo(0.075, hipY + 1.34);
-    path.lineTo(-0.075, hipY + 1.34);
-    path.closePath();
-    _fillShadowed(ctx, path, Palette.neck);
+  void _drawPteruges(
+    CanvasRenderingContext2D ctx,
+    double hipY,
+    double bodyLean,
+  ) {
+    ctx.save();
+    // Pteruges drape across the hips and swing subtly with torso lean.
+    final skirtTop = hipY + 0.01;
+    final skirtBottom = hipY - 0.34;
+    final sway = -bodyLean * 0.18;
 
-    final highlight = Path2D();
-    highlight.moveTo(0.015, hipY + 0.90);
-    highlight.lineTo(0.065, hipY + 0.90);
-    highlight.lineTo(0.050, hipY + 1.31);
-    highlight.lineTo(0.010, hipY + 1.31);
-    highlight.closePath();
-    ctx.fillStyle = Palette.neckLight;
-    ctx.fill(highlight);
+    final bgPath = Path2D();
+    bgPath.moveTo(-0.20, skirtTop);
+    bgPath.lineTo(0.17, skirtTop);
+    bgPath.lineTo(0.20 + sway, skirtBottom);
+    bgPath.lineTo(-0.23 + sway, skirtBottom);
+    bgPath.closePath();
+    _fillShadowed(ctx, bgPath, Palette.ink);
 
-    final collar = _roundedRectPath(-0.13, hipY + 0.86, 0.26, 0.09, 0.02);
-    ctx.fillStyle = Palette.ink;
-    ctx.fill(collar);
-    ctx.strokeStyle = Palette.cream;
+    const count = 6;
+    const totalTopWidth = 0.35;
+    const totalBotWidth = 0.39;
+    for (var i = 0; i < count; i++) {
+      final t0 = i / count;
+      final t1 = (i + 0.84) / count;
+      final topX0 = -0.19 + t0 * totalTopWidth;
+      final topX1 = -0.19 + t1 * totalTopWidth;
+      final botX0 = -0.21 + sway + t0 * totalBotWidth;
+      final botX1 = -0.21 + sway + t1 * totalBotWidth;
+
+      final strip = Path2D();
+      strip.moveTo(topX0, skirtTop);
+      strip.lineTo(topX1, skirtTop);
+      strip.lineTo(botX1, skirtBottom);
+      strip.lineTo(botX0, skirtBottom);
+      strip.closePath();
+      ctx.fillStyle = i.isEven ? Palette.cream : Palette.creamDim;
+      ctx.fill(strip);
+    }
+
+    ctx.strokeStyle = Palette.ink;
     ctx.lineWidth = 0.012;
+    ctx.stroke(bgPath);
+    ctx.restore();
+  }
+
+  void _drawNeck(
+    CanvasRenderingContext2D ctx,
+    Vec2 shoulder,
+    Vec2 headCenter,
+    PoseParams pose,
+  ) {
+    final headTilt = pose.headTilt;
+    final nape = headCenter + const Vec2(-0.13, -0.10).rotate(headTilt);
+    final throat = headCenter + const Vec2(0.07, -0.12).rotate(headTilt);
+    final baseBack = Vec2(-0.09, shoulder.y + 0.10);
+    final baseFront = Vec2(0.08, shoulder.y + 0.10);
+
+    final path = Path2D();
+    path.moveTo(baseBack.x, baseBack.y);
+    path.quadraticCurveTo(
+      (baseBack.x + nape.x) * 0.5 - 0.01,
+      (baseBack.y + nape.y) * 0.5,
+      nape.x,
+      nape.y,
+    );
+    path.lineTo(throat.x, throat.y);
+    path.quadraticCurveTo(
+      (baseFront.x + throat.x) * 0.5 - 0.01,
+      (baseFront.y + throat.y) * 0.5,
+      baseFront.x,
+      baseFront.y,
+    );
+    path.closePath();
+    _fillShadowed(ctx, path, Palette.ink);
+
+    // Subtle warm neck shading and collar line at the base of the throat
+    ctx.strokeStyle = Palette.cream;
+    ctx.lineWidth = 0.010;
     ctx.beginPath();
-    ctx.moveTo(-0.11, hipY + 0.955);
-    ctx.lineTo(0.11, hipY + 0.955);
+    ctx.moveTo(baseBack.x + 0.01, baseBack.y + 0.02);
+    ctx.quadraticCurveTo(
+      0,
+      baseFront.y + 0.005,
+      baseFront.x - 0.01,
+      baseFront.y + 0.02,
+    );
     ctx.stroke();
   }
 
@@ -296,75 +486,17 @@ class WarriorPainter {
     ctx.translate(head.x, head.y);
     ctx.rotate(pose.headTilt);
 
-    final helmet = Path2D();
-    helmet.moveTo(-0.24, -0.10);
-    helmet.bezierCurveTo(-0.32, 0.10, -0.22, 0.32, 0.02, 0.32);
-    helmet.bezierCurveTo(0.20, 0.32, 0.28, 0.18, 0.26, 0.06);
-    helmet.lineTo(0.22, -0.02);
-    helmet.lineTo(0.26, -0.14);
-    helmet.lineTo(0.18, -0.16);
-    helmet.lineTo(0.13, -0.24);
-    helmet.lineTo(-0.02, -0.26);
-    helmet.lineTo(-0.18, -0.19);
-    helmet.closePath();
+    // 1. High-arched horsehair crest (drawn first so the helmet crown overlaps its base)
     ctx.save();
-    ctx.translate(0.02 * _facing, -0.03);
-    ctx.fillStyle = Palette.shadow;
-    ctx.fill(helmet);
-    ctx.restore();
-    ctx.fillStyle = Palette.ink;
-    ctx.fill(helmet);
-
-    ctx.save();
-    ctx.clip(helmet);
-    final helmetGradient = ctx.createRadialGradient(
-      -0.08,
-      0.10,
-      0.02,
-      -0.02,
-      0.02,
-      0.42,
-    );
-    helmetGradient.addColorStop(0, 'rgba(96, 48, 34, 0.40)');
-    helmetGradient.addColorStop(1, 'rgba(18, 8, 6, 0)');
-    ctx.fillStyle = helmetGradient;
-    ctx.fillRect(-0.45, -0.4, 0.9, 0.85);
-    ctx.restore();
-
-    final eye = Path2D();
-    eye.moveTo(0.06, 0.03);
-    eye.quadraticCurveTo(0.12, 0.06, 0.19, 0.03);
-    eye.quadraticCurveTo(0.12, 0.005, 0.06, 0.03);
-    eye.closePath();
-    ctx.fillStyle = Palette.cream;
-    ctx.fill(eye);
-    _fillCircle(ctx, 0.14, 0.03, 0.016, Palette.ink, shadow: false);
-
-    ctx.strokeStyle = Palette.cream;
-    ctx.lineWidth = 0.014;
-    ctx.beginPath();
-    ctx.moveTo(0.255, 0.08);
-    ctx.lineTo(0.275, -0.12);
-    ctx.stroke();
-
-    ctx.lineWidth = 0.012;
-    ctx.beginPath();
-    ctx.moveTo(0.20, -0.10);
-    ctx.quadraticCurveTo(0.15, -0.17, 0.09, -0.22);
-    ctx.stroke();
-
-    ctx.fillStyle = Palette.ink;
-    ctx.fillRect(-0.012, 0.30, 0.024, 0.10);
-
-    ctx.save();
-    ctx.translate(0, 0.30);
+    ctx.translate(0.0, 0.24);
     ctx.rotate(pose.crestTilt);
+
     final crest = Path2D();
-    crest.moveTo(0.38, 0.00);
-    crest.bezierCurveTo(0.34, 0.12, 0.22, 0.22, 0.08, 0.22);
-    crest.bezierCurveTo(-0.10, 0.22, -0.30, 0.02, -0.44, -0.15);
-    crest.bezierCurveTo(-0.28, -0.08, -0.08, -0.02, 0.12, 0.00);
-    crest.bezierCurveTo(0.22, 0.02, 0.32, 0.02, 0.38, 0.00);
+    crest.moveTo(0.16, 0.04);
+    crest.bezierCurveTo(0.18, 0.24, 0.04, 0.34, -0.10, 0.32);
+    crest.bezierCurveTo(-0.26, 0.30, -0.38, 0.16, -0.42, -0.08);
+    crest.quadraticCurveTo(-0.28, -0.02, -0.16, 0.03);
+    crest.quadraticCurveTo(-0.02, 0.06, 0.16, 0.04);
     crest.closePath();
 
     ctx.save();
@@ -373,24 +505,84 @@ class WarriorPainter {
     ctx.fill(crest);
     ctx.restore();
 
-    final crestGradient = ctx.createLinearGradient(-0.26, 0.18, 0.12, -0.08);
+    final crestGradient = ctx.createLinearGradient(-0.28, 0.28, 0.12, -0.04);
     crestGradient.addColorStop(0, crestLight);
-    crestGradient.addColorStop(1, crestColor);
+    crestGradient.addColorStop(0.7, crestColor);
+    crestGradient.addColorStop(1, crestDark);
     ctx.fillStyle = crestGradient;
     ctx.fill(crest);
     ctx.strokeStyle = crestDark;
-    ctx.lineWidth = 0.012;
+    ctx.lineWidth = 0.011;
     ctx.stroke(crest);
 
+    // Fine plume hair striations
     ctx.strokeStyle = crestLight;
-    ctx.lineWidth = 0.014;
+    ctx.lineWidth = 0.009;
+    for (var i = 0; i < 4; i++) {
+      final t = i / 3;
+      final sx = lerp(-0.04, -0.22, t);
+      final sy = lerp(0.05, 0.00, t);
+      final ex = lerp(0.06, -0.32, t);
+      final ey = lerp(0.28, 0.16, t);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo((sx + ex) * 0.5, (sy + ey) * 0.5 + 0.04, ex, ey);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // 2. Authentic Corinthian Helmet silhouette matching design/ref.png
+    final helmet = Path2D();
+    helmet.moveTo(0.20, 0.06);
+    helmet.bezierCurveTo(0.18, 0.24, 0.04, 0.31, -0.06, 0.30);
+    helmet.bezierCurveTo(-0.20, 0.28, -0.24, 0.12, -0.21, -0.04);
+    helmet.quadraticCurveTo(-0.20, -0.10, -0.25, -0.15);
+    helmet.lineTo(-0.14, -0.16);
+    helmet.quadraticCurveTo(-0.08, -0.11, -0.04, -0.15);
+    helmet.lineTo(0.12, -0.18);
+    helmet.lineTo(0.20, -0.12);
+    helmet.quadraticCurveTo(0.14, -0.08, 0.13, -0.01);
+    helmet.lineTo(0.21, -0.02);
+    helmet.lineTo(0.20, 0.06);
+    helmet.closePath();
+
+    ctx.save();
+    ctx.translate(0.02 * _facing, -0.03);
+    ctx.fillStyle = Palette.shadow;
+    ctx.fill(helmet);
+    ctx.restore();
+
+    ctx.fillStyle = Palette.ink;
+    ctx.fill(helmet);
+
+    // Cream contour lines on the Corinthian helmet matching design/ref.png
+    ctx.strokeStyle = Palette.cream;
+    ctx.lineWidth = 0.011;
     ctx.beginPath();
-    ctx.moveTo(0.36, 0.02);
-    ctx.bezierCurveTo(0.32, 0.12, 0.21, 0.20, 0.08, 0.20);
-    ctx.bezierCurveTo(-0.09, 0.20, -0.28, 0.00, -0.41, -0.13);
+    ctx.moveTo(-0.22, -0.13);
+    ctx.quadraticCurveTo(-0.18, -0.04, -0.19, 0.08);
+    ctx.bezierCurveTo(-0.19, 0.24, -0.04, 0.28, 0.08, 0.25);
+    ctx.quadraticCurveTo(0.17, 0.20, 0.18, 0.06);
+    ctx.lineTo(0.19, -0.01);
     ctx.stroke();
 
-    ctx.restore();
+    ctx.beginPath();
+    ctx.moveTo(0.18, -0.11);
+    ctx.lineTo(0.11, -0.16);
+    ctx.lineTo(-0.03, -0.13);
+    ctx.quadraticCurveTo(-0.07, -0.06, -0.13, -0.14);
+    ctx.stroke();
+
+    // Focused almond eye inside the ocular slot
+    final eye = Path2D();
+    eye.moveTo(0.08, 0.025);
+    eye.quadraticCurveTo(0.125, 0.050, 0.165, 0.025);
+    eye.quadraticCurveTo(0.125, 0.005, 0.08, 0.025);
+    eye.closePath();
+    ctx.fillStyle = Palette.cream;
+    ctx.fill(eye);
+    _fillCircle(ctx, 0.135, 0.025, 0.012, Palette.ink, shadow: false);
+
     ctx.restore();
   }
 
@@ -549,27 +741,20 @@ class WarriorPainter {
     ctx.translate(grip.x, grip.y);
     ctx.rotate(angle);
 
-    final butt = -1.47 + slide;
-    final shaftEnd = 1.15 + slide;
+    final buttTip = -1.46 + slide;
+    final buttBase = -1.30 + slide;
+    final shaftEnd = 1.12 + slide;
 
-    ctx.strokeStyle = Palette.shadow;
-    ctx.lineWidth = 0.05;
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(butt + 0.02 * _facing, -0.02);
-    ctx.lineTo(shaftEnd + 0.02 * _facing, -0.02);
-    ctx.stroke();
+    // Tapered shaft path with rear sauroter point matching design/ref.png
+    final shaft = Path2D();
+    shaft.moveTo(buttTip, 0);
+    shaft.lineTo(buttBase, 0.018);
+    shaft.lineTo(shaftEnd, 0.021);
+    shaft.lineTo(shaftEnd, -0.021);
+    shaft.lineTo(buttBase, -0.018);
+    shaft.closePath();
 
-    ctx.strokeStyle = Palette.ink;
-    ctx.lineWidth = 0.045;
-    ctx.beginPath();
-    ctx.moveTo(butt, 0);
-    ctx.lineTo(shaftEnd, 0);
-    ctx.stroke();
-
-    // The grip stays under the fist while the shaft slides through it.
-    ctx.fillStyle = Palette.cream;
-    ctx.fillRect(-0.055, -0.045, 0.11, 0.09);
+    _fillShadowed(ctx, shaft, Palette.ink);
 
     ctx.restore();
   }
@@ -584,142 +769,196 @@ class WarriorPainter {
     ctx.save();
     ctx.translate(grip.x, grip.y);
     ctx.rotate(angle);
-    final base = 1.13 + slide;
-    final mid = 1.30 + slide;
-    final tip = 1.50 + slide;
+    final socket = 1.05 + slide;
+    final base = 1.11 + slide;
+    final mid = 1.24 + slide;
+    final tip = 1.46 + slide;
+
+    // Socket collar
+    final collar = _roundedRectPath(socket, -0.024, 0.065, 0.048, 0.010);
+    ctx.fillStyle = Palette.creamDim;
+    ctx.fill(collar);
+
+    // Classic leaf-shaped dory spearhead with central rib
     final leaf = Path2D();
-    leaf.moveTo(base, -0.055);
-    leaf.quadraticCurveTo(mid, -0.10, tip, 0);
-    leaf.quadraticCurveTo(mid, 0.10, base, 0.055);
+    leaf.moveTo(base, 0);
+    leaf.quadraticCurveTo(mid, -0.082, tip, 0);
+    leaf.quadraticCurveTo(mid, 0.082, base, 0);
     leaf.closePath();
     _fillShadowed(ctx, leaf, Palette.creamBright);
     ctx.strokeStyle = Palette.creamDim;
-    ctx.lineWidth = 0.012;
+    ctx.lineWidth = 0.011;
     ctx.stroke(leaf);
+
+    // Central spine ridge of the spearhead
+    ctx.strokeStyle = Palette.creamDim;
+    ctx.lineWidth = 0.010;
+    ctx.beginPath();
+    ctx.moveTo(base + 0.02, 0);
+    ctx.lineTo(tip - 0.03, 0);
+    ctx.stroke();
 
     if (bloody) {
       ctx.save();
       ctx.clip(leaf);
       final stain = Path2D();
       stain.moveTo(base + 0.02, -0.06);
-      stain.quadraticCurveTo(mid - 0.02, -0.08, tip - 0.04, 0);
-      stain.quadraticCurveTo(mid, 0.09, base + 0.02, 0.06);
+      stain.quadraticCurveTo(mid - 0.02, -0.08, tip - 0.02, 0);
+      stain.quadraticCurveTo(mid, 0.08, base + 0.02, 0.06);
       stain.closePath();
       ctx.fillStyle = Palette.bloodBright;
       ctx.fill(stain);
       ctx.fillStyle = Palette.blood;
-      ctx.fillRect(base + 0.14, 0.025, 0.22, 0.028);
+      ctx.fillRect(base + 0.12, 0.018, 0.20, 0.025);
       ctx.restore();
     }
 
     ctx.restore();
   }
 
-  void _drawArm(
+  void _drawShieldArm(
     CanvasRenderingContext2D ctx,
     Vec2 shoulder,
     Vec2 hand,
-    double upperLength,
-    double lowerLength,
-    double bend, {
-    double? handAngle,
-    bool grip = false,
-  }) {
-    final ik = solveTwoBone(shoulder, hand, upperLength, lowerLength, bend);
+    Vec2 shieldCenter,
+  ) {
+    final ik = solveTwoBone(shoulder, hand, 0.34, 0.34, -1);
     final elbow = ik.joint;
     final end = ik.end;
 
-    _fillCircle(ctx, shoulder.x, shoulder.y, 0.09, Palette.ink);
-    _drawLimb(ctx, shoulder, elbow, 0.072, 0.062, Palette.ink);
-    _drawLimb(ctx, elbow, end, 0.062, 0.052, Palette.ink);
+    final upper = _sculptedLimbPath(
+      shoulder,
+      elbow,
+      startFront: 0.068,
+      startBack: 0.068,
+      midFront: 0.072,
+      midBack: 0.064,
+      endFront: 0.052,
+      endBack: 0.052,
+    );
+    _fillShadowed(ctx, upper, Palette.ink);
+
+    final lower = _sculptedLimbPath(
+      elbow,
+      end,
+      startFront: 0.056,
+      startBack: 0.056,
+      midFront: 0.060,
+      midBack: 0.052,
+      endFront: 0.042,
+      endBack: 0.042,
+    );
+    _fillShadowed(ctx, lower, Palette.ink);
+    _fillCircle(ctx, elbow.x, elbow.y, 0.048, Palette.ink);
+  }
+
+  void _drawSpearArm(
+    CanvasRenderingContext2D ctx,
+    Vec2 shoulder,
+    Vec2 elbow,
+    Vec2 end,
+    double handAngle,
+  ) {
+    // Deltoid shoulder cap inside the cuirass armhole
+    _fillCircle(ctx, shoulder.x, shoulder.y, 0.074, Palette.ink);
+
+    // Sculpted upper arm (bicep and tricep contour)
+    final upper = _sculptedLimbPath(
+      shoulder,
+      elbow,
+      startFront: 0.070,
+      startBack: 0.070,
+      midFront: 0.078,
+      midBack: 0.068,
+      endFront: 0.052,
+      endBack: 0.055,
+    );
+    _fillShadowed(ctx, upper, Palette.ink);
+
+    // Rounded olecranon elbow joint
     _fillCircle(ctx, elbow.x, elbow.y, 0.052, Palette.ink);
-    _fillCircle(ctx, end.x, end.y, 0.060, Palette.ink);
 
-    if (grip && handAngle != null) {
-      ctx.save();
-      ctx.translate(end.x, end.y);
-      ctx.rotate(handAngle);
-      final palm = _roundedRectPath(-0.075, -0.065, 0.15, 0.13, 0.04);
-      _fillShadowed(ctx, palm, Palette.ink);
-      final fist = _roundedRectPath(-0.10, -0.075, 0.20, 0.15, 0.05);
-      _fillShadowed(ctx, fist, Palette.ink);
+    // Sculpted forearm (brachioradialis swell tapering to the wrist)
+    final lower = _sculptedLimbPath(
+      elbow,
+      end,
+      startFront: 0.058,
+      startBack: 0.058,
+      midFront: 0.064,
+      midBack: 0.056,
+      endFront: 0.042,
+      endBack: 0.042,
+    );
+    _fillShadowed(ctx, lower, Palette.ink);
 
-      ctx.strokeStyle = Palette.inkSoft;
-      ctx.lineWidth = 0.012;
-      for (var i = 0; i < 3; i++) {
-        final x = 0.015 + i * 0.025;
-        ctx.beginPath();
-        ctx.moveTo(x, -0.058);
-        ctx.lineTo(x + 0.008, 0.050);
-        ctx.stroke();
-      }
-
-      final thumb = _roundedRectPath(-0.088, 0.030, 0.080, 0.042, 0.018);
-      ctx.fillStyle = Palette.inkSoft;
-      ctx.fill(thumb);
-      ctx.restore();
-    } else {
-      _fillCircle(ctx, end.x, end.y, 0.072, Palette.ink);
-    }
-
+    // Cream wrist band just below the fist
     final d = (end - elbow).normalized;
     final p = d.perp;
     ctx.strokeStyle = Palette.cream;
-    ctx.lineWidth = 0.012;
+    ctx.lineWidth = 0.011;
     ctx.beginPath();
     ctx.moveTo(
-      end.x + p.x * 0.055 - d.x * 0.045,
-      end.y + p.y * 0.055 - d.y * 0.045,
+      end.x + p.x * 0.044 - d.x * 0.052,
+      end.y + p.y * 0.044 - d.y * 0.052,
     );
     ctx.lineTo(
-      end.x - p.x * 0.055 - d.x * 0.045,
-      end.y - p.y * 0.055 - d.y * 0.045,
+      end.x - p.x * 0.044 - d.x * 0.052,
+      end.y - p.y * 0.044 - d.y * 0.052,
     );
     ctx.stroke();
+
+    // Compact overhand dory fist wrapped around the shaft
+    ctx.save();
+    ctx.translate(end.x, end.y);
+    ctx.rotate(handAngle);
+    final fist = _roundedRectPath(-0.068, -0.052, 0.136, 0.098, 0.032);
+    _fillShadowed(ctx, fist, Palette.ink);
+
+    // Subtle curled finger divisions on the overhand grip
+    ctx.strokeStyle = Palette.cream;
+    ctx.lineWidth = 0.008;
+    for (var i = 0; i < 3; i++) {
+      final fx = -0.022 + i * 0.024;
+      ctx.beginPath();
+      ctx.moveTo(fx, -0.038);
+      ctx.lineTo(fx + 0.004, 0.015);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
-  void _drawLimb(
-    CanvasRenderingContext2D ctx,
+  /// Builds an organic, muscular limb contour between [a] and [b] using
+  /// quadratic curves along the anterior (`+perp`) and posterior (`-perp`) edges.
+  Path2D _sculptedLimbPath(
     Vec2 a,
-    Vec2 b,
-    double halfWidthA,
-    double halfWidthB,
-    String color,
-  ) {
-    final path = _limbPath(a, b, halfWidthA, halfWidthB);
-    _fillShadowed(ctx, path, color);
-  }
-
-  Path2D _limbPath(Vec2 a, Vec2 b, double halfWidthA, double halfWidthB) {
-    final d = (b - a).normalized;
+    Vec2 b, {
+    required double startFront,
+    required double startBack,
+    required double midFront,
+    required double midBack,
+    required double endFront,
+    required double endBack,
+  }) {
+    final delta = b - a;
+    final d = delta.normalized;
     final p = d.perp;
+    final mid = a + delta * 0.46;
+
+    final aFront = a + p * startFront;
+    final mFront = mid + p * midFront;
+    final bFront = b + p * endFront;
+
+    final bBack = b - p * endBack;
+    final mBack = mid - p * midBack;
+    final aBack = a - p * startBack;
+
     final path = Path2D();
-    path.moveTo(a.x + p.x * halfWidthA, a.y + p.y * halfWidthA);
-    path.lineTo(b.x + p.x * halfWidthB, b.y + p.y * halfWidthB);
-    path.lineTo(b.x - p.x * halfWidthB, b.y - p.y * halfWidthB);
-    path.lineTo(a.x - p.x * halfWidthA, a.y - p.y * halfWidthA);
+    path.moveTo(aFront.x, aFront.y);
+    path.quadraticCurveTo(mFront.x, mFront.y, bFront.x, bFront.y);
+    path.lineTo(bBack.x, bBack.y);
+    path.quadraticCurveTo(mBack.x, mBack.y, aBack.x, aBack.y);
     path.closePath();
     return path;
-  }
-
-  void _drawCrossBand(
-    CanvasRenderingContext2D ctx,
-    Vec2 a,
-    Vec2 b,
-    double distance,
-    double halfWidth,
-    String color,
-    double lineWidth,
-  ) {
-    final d = (b - a).normalized;
-    final p = d.perp;
-    final center = a + d * distance;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = lineWidth;
-    ctx.beginPath();
-    ctx.moveTo(center.x + p.x * halfWidth, center.y + p.y * halfWidth);
-    ctx.lineTo(center.x - p.x * halfWidth, center.y - p.y * halfWidth);
-    ctx.stroke();
   }
 
   void _fillShadowed(

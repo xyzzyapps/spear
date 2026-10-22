@@ -392,65 +392,71 @@ root is at the ground; the right warrior is mirrored. Key local points:
 
 | Point | Local coordinate |
 | --- | --- |
-| Hip | (0, 1.15 - crouch) |
-| Shoulder | (0, hip.y + 0.87) |
-| Head centre | (0.08, hip.y + 1.57) |
-| Back hip | (-0.18, hip.y) |
-| Front hip | (0.02, hip.y) |
+| Hip | (0, 1.06 - crouch) |
+| Spear shoulder | (-0.04, hip.y + 0.78) |
+| Shield shoulder | (0.08, hip.y + 0.76) |
+| Head centre | (0.06, hip.y + 1.24) |
+| Back hip | (-0.16, hip.y) |
+| Front hip | (0.06, hip.y) |
 | Back foot | (-0.75, 0.08) |
 | Front foot | (0.45, 0.08) |
 | Left shield centre | hand + (0.25, 0.08) |
 | Shield radius left | 0.50 |
 | Shield radius right | 0.68 |
 
-The rig has more than the original two-bone chains:
+The rig uses sculpted anatomical chains:
 
 | Chain | Joints | Lengths |
 | --- | --- | --- |
-| Spear arm | shoulder, elbow, wrist, fist | 0.34 / 0.44, fist 0.20 |
+| Spear arm | shoulder, elbow, wrist, fist | 0.38 / 0.44, fist 0.136 |
 | Shield arm | shoulder, elbow, wrist, hand | 0.34 / 0.34 |
-| Legs | hip, knee, ankle, foot | 0.60 / 0.64 |
-| Neck | torso top, collar, head base | 0.84..1.34 local |
+| Legs | hip, knee, ankle, foot | 0.55 / 0.57 |
+| Neck | shoulder collar to rotating helmet nape/throat | dynamic bezier |
 
-The spear hand is the **reachable end** of the arm IK, not the raw pose target.
-The grip is 0.02 units below the hand, putting the palm over the shaft: the
-overhand grip used for the dory. The fist is rotated to the spear angle, with
-three finger ridges on the tip side (the pinky is closest to the tip) and a
-thumb on the butt side. The wrist has a cream cuff. The shield arm is drawn
-behind the torso and shield, so the forearm and hand are mostly hidden while
-the shield is visibly supported. A black shoulder cap covers the arm root.
+Both human knees bend forward (`bend = +1`). The thighs use sculpted quadriceps
+and hamstring contours, and the lower legs wear contoured Greek bronze greaves
+(knemides) with a calf muscle swell, Achilles taper, and a cream patellar loop
+and shin border matching `design/ref.png`. Feet have a rounded heel, arched
+sole, and tapered forefoot that rotates around the ankle during locomotion and
+lunges.
 
-The neck is a visible brown column from the torso top to the underside of the
-helmet, with a black gorget and cream collar line. The helmet overlaps the top
-of the neck; the head is no longer floating above the torso.
+The spear arm uses `_solveSpearArm` to keep the elbow on the anatomical
+lower-posterior side (`score = y + 0.35 * x`), forming the classic V-bent
+overhand dory stance in idle/windup and driving the forearm forward and up on
+the thrust without ever flipping the elbow above the shoulder. The grip sits
+0.015 units below the reachable hand so the palm wraps over the shaft.
 
-The right shield is biased upward by 0.20 units and uses a different centre
-offset (0.20, 0.10), matching the taller shield in the reference. The right back
-foot is 0.10 units wider.
+The neck is a dynamic quadratic bezier column connecting the shoulder collar to
+the rotating helmet nape and throat attachment points, flexing naturally with
+`headTilt` and `bodyLean`. The Corinthian helmet features a high cranial dome,
+flared neck guard, pointed cheek guard, nasal projection, almond eye slot,
+cream contour lines, and a high-arched horsehair crest with fine hair
+striations.
 
-Grip reference: the overhand dory grip is held overhead with the pinky closest
-to the spear tip; the front ranks thrust over the upper rim of the shield
-(Liberty University research symposium on hoplite grip positions; Celtic
-WebMerchant's dory notes; Wikipedia, "Dory (spear)").
+The cuirass has a cream-rimmed shoulder cutout, waist boss fastener, segmented
+belt, diagonal scabbard with cream chape bindings, and 6 layered pteruges strips
+that swing with the torso lean.
 
 Draw order, back to front:
 
-1. Back leg.
-2. Front leg.
+1. Back leg (thigh, foot, contoured bronze greave).
+2. Front leg (thigh, foot, contoured bronze greave).
 3. Shield arm (behind the torso and shield).
-4. Body: torso gradient, black chest plate, belt, pteruges, sword.
-5. Neck: brown neck, collar, gorget.
-6. Head and helmet.
-7. Spear shaft (so the shield covers it).
-8. Shield: outer rim, inner field gradient, dot ring, rosette or lambda;
+4. Sword scabbard and layered pteruges skirt.
+5. Torso cuirass, armhole plate, cream shoulder ring, and segmented belt.
+6. Spear shaft with tapered rear sauroter and leaf spearhead with socket collar,
+   central spine ridge, and blood stain (drawn before the head and shield so
+   each warrior's spear passes behind their own helmet and shield).
+7. Articulated bezier neck and collar line.
+8. High-arched crest and Corinthian helmet.
+9. Shield: outer rim, inner field gradient, dot ring, rosette or lambda;
    blood splats if the shield was hit.
-9. Near spear arm, wrist, and fist.
-10. Spear leaf tip; a blood stain if the spear has drawn blood.
+10. Near spear arm (deltoid cap, bicep/tricep, elbow, forearm, cream wrist band,
+    and overhand fist).
 
 Each shape gets a manual paper shadow offset by roughly (2, 3) reference pixels
 in screen space, so the light direction stays consistent when the right warrior
-is mirrored. Terracotta greaves use a vertical gradient and a thin front
-highlight. The shield field uses a radial gradient for a subtle paper sheen.
+is mirrored.
 
 ### 7.4 Poses
 
@@ -460,27 +466,21 @@ lunge, and bob. `poseFor(fighter, time)` returns the target for the current
 state:
 
 - Idle: a slow weight drift (`torsoShift`), breathing lean/crouch, shield and
-  spear micro-motion, a lagging crest, and a fist on the shaft. The guard is
-  never frozen.
-- Walk: a low, planted-foot gait. The stance foot travels backward under the
-  body for 55% of the cycle while the swing foot lifts, travels forward, and
-  drops its toe. The hips drop 0.14 units so the stride stays inside the leg
-  reach; the cycle is 8.0 rad/s, the foot amplitude is 0.22 units, the lift is
-  0.10 units, the torso shift is 0.060, the forward lean is 0.050, and the body
-  rocks 0.030. The shield, spear, head, and crest have secondary sway. The
-  foot plant rate matches the 1.10 unit/s walk speed.
-- Windup: lean back, torso shift back 0.05, crouch 0.06, spear hand pulled back
-  0.18 and up 0.06, spear tilt +0.35 rad, spear slide -0.12, shield hand up
-  0.10 and back 0.04, shield tilt -0.03, head/crest lag. The spear tip draws
-  high and behind the shoulder for the jousting beat.
-- Attack: the full thrust is the target as soon as the active state begins. The
-  lunge is 0.30, the crouch is 0.10, the torso shifts forward 0.08, the lean is
-  0.16, the spear hand extends 0.82, the spear tilt cancels the windup at
-  -0.35, and the shaft slides 0.50 through the grip. The shield punches 0.20.
-  The front foot steps 0.26 with a lift and toe drop; the back foot shifts back
-  0.10 with its heel lifting. The world spear angle sweeps from about 32 degrees
-  at the windup to about 3 degrees at full extension, and the tip crosses the
-  defender's shield. The scene blends at 80/s so the poke reads as a poke.
+  spear micro-motion, a lagging crest, and an overhand fist on the shaft.
+- Walk: an athletic planted-foot gait. The stance foot travels backward under
+  the body for 55% of the cycle with a mid-to-late stance heel-to-ball push-off
+  roll while the swing foot lifts with an early-skewed knee pickup, travels
+  forward, and drops its toe. The hips settle 0.05 units with a double-step
+  vertical bob (`bob`) and pelvic crouch oscillation.
+- Windup: lean back 0.14, torso shift back 0.06, crouch 0.07, spear hand pulled
+  back 0.20 and up 0.08, spear tilt +0.36, spear slide -0.14, shield hand up
+  0.12 and back 0.03, back foot braced back 0.04. The raised hand cocks the
+  spear so the point aims slightly downward over the opposing shield rim.
+- Attack: lunge 0.32, crouch 0.06, torso shift forward 0.09, forward lean 0.16,
+  spear hand drive +0.73, spear tilt -0.36, and shaft slide +0.78 through the
+  grip so the spearhead shoots across the defender's shield while the fist stays
+  cleanly behind the helmet. The front foot steps 0.28 with a lift and toe drop;
+  the back foot drives with a heel lift.
 - Recover: ease from the full thrust back to the base guard over 0.35 s.
 - Block: deeper crouch (0.075), shield hand up 0.20 and forward 0.05, shield
   tilt -0.18, spear hand lowered, torso shifted back. A blocked impact adds a
@@ -492,24 +492,6 @@ state:
 - Dead: the knees buckle for 0.30 s, then the body falls to a 1.35 rad root
   rotation over 0.70 s; the shield and spear drop, the head/crest droop, and
   the feet spread.
-
-The base spear hand sits 0.52 units above the shoulder (2.54 local at the
-reference hip height), with the grip 0.02 below it so the palm is over the
-shaft. This is the overhand dory grip; the shaft slides through the fist, and
-the fingers point toward the tip while the thumb sits on the butt side. The
-wrist is a distinct joint with a cream cuff; the shoulder has a black cap. The
-shield arm is a second full chain behind the shield, so the board is visibly
-held rather than floating.
-
-The neck is a brown papercut column from the torso top to the helmet underside,
-with a black gorget and cream collar line. It is drawn before the head so the
-helmet overlaps the top of the neck.
-
-The spear hand is the reachable end of the two-bone arm, not the raw target.
-The grip and fist use that end, so a deep windup cannot pull the hand off the
-shaft. The fist is a rounded papercut block aligned to the spear angle; the
-shaft slides through it. The attacker is drawn last so the spear tip visibly
-crosses the defender's shield instead of disappearing behind it.
 
 The scene smooths each field toward the target with a state-dependent
 exponential blend: idle 20/s, walk 24/s, windup 40/s, attack 80/s, recover
@@ -615,7 +597,7 @@ CSS states:
 | --- | --- |
 | `dart pub get` | create the local package config (no external packages) |
 | `dart analyze` | static analysis; must be clean |
-| `dart run tool/test.dart` | 60 VM tests |
+| `dart run tool/test.dart` | 61 VM tests |
 | `dart run tool/build.dart` | format, analyze, compile `web/main.dart` to `app.js` |
 | `dart run tool/serve.dart` | dev server on `http://127.0.0.1:4173/` |
 | `dart run tool/smoke.dart` | Chrome DevTools smoke test at 480x270; writes `build/smoke_idle.png`, `smoke_block.png`, `smoke_attack.png`, `smoke_walk.png`, and `smoke.png` |
@@ -631,7 +613,7 @@ installed. It uses Chrome DevTools Protocol over a local WebSocket, emulates
 Required local evidence:
 
 1. `dart analyze` reports no issues.
-2. `dart run tool/test.dart` reports `60 tests: 60 passed, 0 failed`.
+2. `dart run tool/test.dart` reports `61 tests: 61 passed, 0 failed`.
 3. `dart run tool/build.dart` completes and writes `app.js`.
 4. `dart run tool/check.dart` reports all checks passed.
 5. `dart run tool/smoke.dart` reports all smoke checks passed.

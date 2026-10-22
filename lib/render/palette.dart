@@ -12,6 +12,12 @@ class Palette {
   static const String greave = '#8e4125';
   static const String greaveLight = '#a25130';
   static const String greaveDark = '#73321a';
+  static const String bronzeHighlight = '#d48654';
+
+  static const String spearWood = '#2b160f';
+  static const String spearWoodLight = '#3d2016';
+  static const String sauroterBronze = '#8a482b';
+  static const String sauroterLight = '#a85b37';
 
   static const String cream = '#f0e0c7';
   static const String creamBright = '#f6ead6';

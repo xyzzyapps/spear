@@ -92,9 +92,8 @@ PoseParams poseFor(Fighter fighter, double time) {
     case FighterState.idle:
       break;
     case FighterState.walk:
-      // Drop the hips so the stride stays inside the leg reach; a low,
-      // deliberate hoplite advance rather than a straight-legged glide.
-      pose.crouch += 0.14;
+      // Drop the hips slightly so the stride stays athletic and grounded.
+      pose.crouch += 0.05;
       _applyGait(
         pose,
         fighter,
@@ -194,39 +193,40 @@ PoseParams poseFor(Fighter fighter, double time) {
 }
 
 void _applyWindup(PoseParams pose, double k) {
-  pose.bodyLean += 0.12 * k;
-  pose.crouch += 0.06 * k;
-  pose.torsoShift -= 0.05 * k;
-  pose.spearHandOffset += const Vec2(-0.18, 0.06) * k;
-  pose.spearTilt += 0.35 * k;
-  pose.spearSlide -= 0.12 * k;
-  pose.shieldHandOffset += const Vec2(-0.04, 0.10) * k;
-  pose.shieldTilt -= 0.03 * k;
-  pose.headTilt += 0.02 * k;
-  pose.crestTilt += 0.04 * k;
+  pose.bodyLean += 0.14 * k;
+  pose.crouch += 0.07 * k;
+  pose.torsoShift -= 0.06 * k;
+  pose.spearHandOffset += const Vec2(-0.20, 0.08) * k;
+  pose.spearTilt += 0.36 * k;
+  pose.spearSlide -= 0.14 * k;
+  pose.shieldHandOffset += const Vec2(-0.03, 0.12) * k;
+  pose.shieldTilt -= 0.05 * k;
+  pose.backFoot += Vec2(-0.04 * k, 0);
+  pose.headTilt += 0.03 * k;
+  pose.crestTilt += 0.06 * k;
 }
 
 void _applyThrust(PoseParams pose, double k) {
   final step = math.sin(math.pi * k);
-  pose.lunge += 0.30 * k;
-  pose.crouch += 0.10 * k;
-  pose.torsoShift += 0.08 * k;
+  pose.lunge += 0.32 * k;
+  pose.crouch += 0.06 * k;
+  pose.torsoShift += 0.09 * k;
   pose.bodyLean -= 0.16 * k;
-  pose.spearHandOffset += const Vec2(0.82, -0.06) * k;
-  pose.spearTilt -= 0.35 * k;
-  pose.spearSlide += 0.50 * k;
-  pose.shieldHandOffset += const Vec2(0.20, 0.02) * k;
-  pose.shieldTilt += 0.08 * k;
-  pose.frontFoot += Vec2(0.26 * k, 0.05 * step * k);
-  pose.backFoot += Vec2(-0.10 * k, 0.03 * step * k);
-  pose.frontFootRot = -0.15 * step;
-  pose.backFootRot = -0.18 * k;
-  pose.headTilt -= 0.04 * k;
-  pose.crestTilt -= 0.06 * k;
+  pose.spearHandOffset += const Vec2(0.73, -0.06) * k;
+  pose.spearTilt -= 0.36 * k;
+  pose.spearSlide += 0.78 * k;
+  pose.shieldHandOffset += const Vec2(0.18, 0.02) * k;
+  pose.shieldTilt += 0.09 * k;
+  pose.frontFoot += Vec2(0.28 * k, 0.05 * step * k);
+  pose.backFoot += Vec2(-0.06 * k, 0.03 * step * k);
+  pose.frontFootRot = -0.16 * step;
+  pose.backFootRot = -0.20 * k;
+  pose.headTilt -= 0.05 * k;
+  pose.crestTilt -= 0.08 * k;
 }
 
-/// A planted-foot gait: the stance foot moves backward through the body at
-/// close to movement speed, then swings forward with a toe drop.
+/// A planted-foot gait: the stance foot moves backward under the body with
+/// heel-to-ball roll, then swings forward with a knee lift and toe drop.
 void _applyGait(
   PoseParams pose,
   Fighter fighter, {
@@ -255,16 +255,21 @@ void _applyGait(
   pose.backFootRot = back.rotation;
 
   final swing = math.sin(phase * math.pi * 2);
+  final doubleStep = math.cos(phase * math.pi * 4);
   pose.torsoShift += torsoSway * math.cos(phase * math.pi * 2) * direction;
   pose.bodyLean -= lean * direction;
-  pose.bodyLean += 0.030 * swing * direction;
-  pose.crouch += 0.025 * (0.5 + 0.5 * math.cos(phase * math.pi * 4));
-  pose.shieldHandOffset += Vec2(0.015, 0.050 * swing);
-  pose.spearHandOffset += Vec2(0, 0.030 * math.sin(phase * math.pi * 2 + 0.4));
-  pose.spearTilt += 0.025 * math.sin(phase * math.pi * 2 + 0.3) * direction;
-  pose.shieldTilt += 0.060 * math.sin(phase * math.pi * 2 + 0.9) * direction;
-  pose.headTilt += 0.030 * math.sin(phase * math.pi * 2 + 0.6);
-  pose.crestTilt += 0.050 * math.sin(phase * math.pi * 2 + 0.9);
+  pose.bodyLean += 0.032 * swing * direction;
+  pose.crouch += 0.028 * (0.5 + 0.5 * doubleStep);
+  pose.bob = 0.012 * (1 - doubleStep);
+  pose.shieldHandOffset += Vec2(0.018 * swing, 0.048 * swing);
+  pose.spearHandOffset += Vec2(
+    -0.018 * swing * direction,
+    0.032 * math.sin(phase * math.pi * 2 + 0.4),
+  );
+  pose.spearTilt += 0.028 * math.sin(phase * math.pi * 2 + 0.3) * direction;
+  pose.shieldTilt += 0.055 * math.sin(phase * math.pi * 2 + 0.9) * direction;
+  pose.headTilt += 0.026 * math.sin(phase * math.pi * 2 + 0.6);
+  pose.crestTilt += 0.055 * math.sin(phase * math.pi * 2 + 0.9);
 }
 
 _FootStep _footStep(
@@ -280,15 +285,22 @@ _FootStep _footStep(
   double rotation = 0;
 
   if (s < 0.55) {
-    // Stance: the foot travels backward under the body.
-    offset = amp * (1 - 2 * (s / 0.55));
+    // Stance: the foot travels backward under the body and rolls toward the ball.
+    final stanceT = s / 0.55;
+    offset = amp * (1 - 2 * stanceT);
+    if (stanceT > 0.55 && stanceT < 0.90) {
+      final push = math.sin(((stanceT - 0.55) / 0.35) * math.pi);
+      rotation = -0.08 * push * direction;
+    }
   } else {
-    // Swing: the foot picks up, travels forward, and drops the toe.
+    // Swing: the knee bends, the foot lifts, travels forward, and drops the toe.
     final u = (s - 0.55) / 0.45;
     final eased = easeInOutCubic(u);
     offset = amp * (-1 + 2 * eased);
-    height = lift * math.sin(math.pi * u);
-    rotation = -0.20 * math.sin(math.pi * u);
+    // Skew lift slightly toward early swing for a natural knee pick-up.
+    final liftCurve = math.sin(math.pi * math.pow(u, 0.88));
+    height = lift * liftCurve;
+    rotation = -0.22 * math.sin(math.pi * u);
   }
 
   return _FootStep(
