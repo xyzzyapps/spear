@@ -1,4 +1,4 @@
-# Homer / Spear - Task List
+# Spear - Task List
 
 ## Foundation
 - [x] Create the Dart web project scaffold (`pubspec.yaml`, `analysis_options.yaml`, `.gitignore`, `.nojekyll`)
@@ -70,4 +70,7 @@
 - [x] Phase 5: Leg mechanics & footwork gait overhaul (athletic hoplite martial stance, anatomical thigh/greave curves, heel-toe roll locomotion, dynamic lunge and recoil footwork)
 - [x] Phase 6: Verification, testing (pose unit tests, dart analyze, tool/test.dart, tool/build.dart, tool/check.dart), update SPEC.md and README.md
 - [x] Draw the warrior's spear tip behind their own shield and align the bot's Lambda shield so the spear peeks from behind the upper shield rim
+- [x] Correct arm layout and z-order to match `ref2.png` (Option A: spear arm and spear behind torso, shield arm on the near shoulder in front of torso and behind shield)
+- [x] Fix dropped `J` attack inputs (add attack input buffer, align cooldown with recovery) and ensure spear thrust animation always visibly extends on attack/hit
+- [x] Replace `Homer` game title and references with `Spear`
 - [x] Commit the completed work (waiting for the user's end-of-session signal)

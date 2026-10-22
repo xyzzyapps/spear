@@ -61,8 +61,8 @@ class ScenePainter {
     return switch (state) {
       FighterState.idle => 20,
       FighterState.walk => 24,
-      FighterState.windup => 40,
-      FighterState.attack => 80,
+      FighterState.windup => 45,
+      FighterState.attack => 220,
       FighterState.recover => 30,
       FighterState.block => 26,
       FighterState.hit => 34,
@@ -82,15 +82,32 @@ class ScenePainter {
         case GameEventType.hit:
           _particles.spawnHit(event.x, event.y);
           _particles.spawnBlood(event.x, event.y);
+          _snapAttackerThrust(event.playerAttacked);
         case GameEventType.blocked:
         case GameEventType.parried:
           _particles.spawnBlock(event.x, event.y);
+          _snapAttackerThrust(event.playerAttacked);
         case GameEventType.roundStart:
         case GameEventType.fight:
         case GameEventType.roundEnd:
         case GameEventType.matchEnd:
           break;
       }
+    }
+  }
+
+  void _snapAttackerThrust(bool? playerAttacked) {
+    if (playerAttacked == null) return;
+    final probe = Fighter(
+      isPlayer: playerAttacked,
+      facing: playerAttacked ? 1 : -1,
+      x: 0,
+    )..state = FighterState.attack;
+    final thrustPose = poseFor(probe, 0);
+    if (playerAttacked) {
+      _playerPose = thrustPose;
+    } else {
+      _botPose = thrustPose;
     }
   }
 
@@ -127,7 +144,7 @@ class ScenePainter {
         '500 18px "Palatino Linotype", Palatino, "Times New Roman", serif';
     ctx.fillStyle = Palette.title;
     ctx.textBaseline = 'middle';
-    const text = 'HOMER';
+    const text = 'SPEAR';
     const spacing = 12.0;
     final widths = <double>[
       for (final char in text.split(''))

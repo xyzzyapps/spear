@@ -15,7 +15,7 @@ void _check(bool condition, String message) {
 }
 
 Future<void> main() async {
-  print('Homer distribution check');
+  print('Spear distribution check');
   print('');
 
   final index = File('index.html');

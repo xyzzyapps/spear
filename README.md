@@ -1,10 +1,10 @@
-# Homer
+# Spear
 
 A papercut hoplite duel for X Player Cards. You are the red-crested warrior on
 the left; the bot is the white-crested warrior on the right. Spears, round
 shields, five hits per round, first to six.
 
-![Homer preview](preview.png)
+![Spear preview](preview.png)
 
 Built with Dart and Canvas 2D, with no runtime dependencies and no external
 assets. The page is a static site: `index.html`, `app.js`, and `preview.png`.

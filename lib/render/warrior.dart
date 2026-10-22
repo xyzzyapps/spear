@@ -37,29 +37,31 @@ class WarriorPainter {
     final hipY = 1.06 - pose.crouch;
     final backHip = Vec2(-0.16, hipY);
     final frontHip = Vec2(0.06, hipY);
-    final shoulder = Vec2(-0.04, hipY + 0.78);
-    final shieldShoulder = Vec2(0.08, hipY + 0.76);
+    final shoulder = Vec2(-0.08, hipY + 0.76);
+    final shieldShoulder = Vec2(-0.01, hipY + 0.70);
+    final shieldAnchor = Vec2(0.08, hipY + 0.76);
     final headCenter = Vec2(0.06, hipY + 1.24);
 
-    // Map pose.spearHandOffset (which stays > 0.5 in y for overhand stance)
-    // into the anatomical back-arm target so the elbow bends down and back
-    // and the fist drives up to the temple without crossing the shield.
-    final handDx = pose.spearHandOffset.x > -0.35
-        ? -0.30 + (pose.spearHandOffset.x + 0.35) * 0.52
-        : pose.spearHandOffset.x + 0.05;
+    // Map pose.spearHandOffset into the anatomical back-arm target so the
+    // upper arm emerges from behind the back of the cuirass, the elbow bends
+    // down-and-back, and the forearm slopes up-and-back in guard and drives
+    // forward behind the nape on the thrust without disappearing behind the torso.
+    final handDx = -0.38 + (pose.spearHandOffset.x + 0.55) * 0.46;
     final spearHandTarget =
         shoulder + Vec2(handDx, pose.spearHandOffset.y - 0.24);
-    final shieldHand = shieldShoulder + pose.shieldHandOffset + shieldHandBias;
+    final shieldHand = shieldAnchor + pose.shieldHandOffset + shieldHandBias;
     final shieldCenter =
         shieldHand + shieldCenterOffset.rotate(pose.shieldTilt);
     // In windup (pose.spearTilt > 0), the raised hand cocks the spear so the
     // point aims slightly downward over the opposing shield rim rather than up
     // into the warrior's own crest.
     final spearAngle = 0.085 - pose.spearTilt * 0.28;
-    final effectiveSlide = pose.spearSlide < 0
-        ? pose.spearSlide * 0.35
-        : pose.spearSlide;
-    final spearArm = _solveSpearArm(shoulder, spearHandTarget, 0.38, 0.44);
+    final effectiveSlide =
+        (pose.spearSlide < 0
+            ? pose.spearSlide * 0.45
+            : pose.spearSlide * 1.30) +
+        0.21;
+    final spearArm = _solveSpearArm(shoulder, spearHandTarget, 0.29, 0.51);
     final actualSpearHand = spearArm.end;
     // Overhand grip: the palm wraps over the shaft.
     final grip = actualSpearHand + const Vec2(0, -0.015);
@@ -85,20 +87,24 @@ class WarriorPainter {
     ctx.save();
     _bodyTransform(ctx, hipY, pose.bodyLean, pose.torsoShift);
 
-    // Off-hand shield arm behind torso and shield.
-    _drawShieldArm(ctx, shieldShoulder, shieldHand, shieldCenter);
-    // Sword scabbard hangs from the waist behind the hip.
-    _drawSword(ctx, hipY);
-    _drawPteruges(ctx, hipY, pose.bodyLean);
-    _drawTorso(ctx, hipY, shoulder);
-    // Spear shaft and tip pass behind the warrior's own helmet and shield so
-    // the bot's spear sits behind its Lambda shield.
+    // 1. Far side (background): spear shaft, spearhead, and spear arm behind
+    // the torso so the arm emerges from behind the upper back of the cuirass
+    // and the spear passes behind the helmet and shield (matching ref2.png).
     _drawSpearShaft(ctx, grip, spearAngle, effectiveSlide);
     _drawSpearTip(ctx, grip, spearAngle, effectiveSlide, fighter.bloodyTip);
-    _drawNeck(ctx, shoulder, headCenter, pose);
-    _drawHead(ctx, headCenter, pose);
-    _drawShield(ctx, shieldCenter, pose, fighter.wounded);
     _drawSpearArm(ctx, shoulder, spearArm.joint, actualSpearHand, spearAngle);
+
+    // 2. Body layer: scabbard, pteruges, neck, cuirass, and helmet.
+    _drawSword(ctx, hipY);
+    _drawPteruges(ctx, hipY, pose.bodyLean);
+    _drawNeck(ctx, shoulder, headCenter, pose);
+    _drawTorso(ctx, hipY);
+    _drawHead(ctx, headCenter, pose);
+
+    // 3. Near side (foreground): shield arm emerging from the cuirass shoulder
+    // socket in front of the torso, followed by the shield in front.
+    _drawShieldArm(ctx, shieldShoulder, shieldHand, shieldCenter);
+    _drawShield(ctx, shieldCenter, pose, fighter.wounded);
     ctx.restore();
 
     ctx.restore();
@@ -319,7 +325,7 @@ class WarriorPainter {
     ctx.stroke();
   }
 
-  void _drawTorso(CanvasRenderingContext2D ctx, double hipY, Vec2 shoulder) {
+  void _drawTorso(CanvasRenderingContext2D ctx, double hipY) {
     final path = Path2D();
     path.moveTo(-0.20, hipY + 0.02);
     path.bezierCurveTo(
@@ -352,22 +358,12 @@ class WarriorPainter {
     ctx.lineWidth = 0.013;
     ctx.stroke(path);
 
-    // Dark chest/armhole plate and cream trim matching design/ref.png
-    final armhole = Path2D();
-    armhole.moveTo(-0.14, hipY + 0.85);
-    armhole.quadraticCurveTo(0.04, hipY + 0.91, 0.18, hipY + 0.80);
-    armhole.lineTo(0.21, hipY + 0.62);
-    armhole.quadraticCurveTo(0.08, hipY + 0.56, -0.04, hipY + 0.64);
-    armhole.quadraticCurveTo(-0.16, hipY + 0.72, -0.14, hipY + 0.85);
-    armhole.closePath();
-    ctx.fillStyle = Palette.ink;
-    ctx.fill(armhole);
-
-    // Cream shoulder cutout ring
+    // Cream collar rim at the top of the cuirass where the neck emerges.
     ctx.strokeStyle = Palette.cream;
     ctx.lineWidth = 0.011;
     ctx.beginPath();
-    ctx.arc(shoulder.x + 0.02, shoulder.y - 0.01, 0.095, -1.2, 2.3, false);
+    ctx.moveTo(-0.11, hipY + 0.87);
+    ctx.quadraticCurveTo(0.00, hipY + 0.85, 0.11, hipY + 0.88);
     ctx.stroke();
 
     // Anatomical cuirass waist line and front boss fastener
@@ -826,17 +822,27 @@ class WarriorPainter {
     final elbow = ik.joint;
     final end = ik.end;
 
+    // Deltoid shoulder cap inside the near-side cuirass armhole
+    _fillCircle(ctx, shoulder.x, shoulder.y, 0.070, Palette.ink);
+
     final upper = _sculptedLimbPath(
       shoulder,
       elbow,
       startFront: 0.068,
       startBack: 0.068,
-      midFront: 0.072,
+      midFront: 0.074,
       midBack: 0.064,
       endFront: 0.052,
       endBack: 0.052,
     );
     _fillShadowed(ctx, upper, Palette.ink);
+
+    // Cream shoulder cutout trim around the posterior edge of the deltoid
+    ctx.strokeStyle = Palette.cream;
+    ctx.lineWidth = 0.011;
+    ctx.beginPath();
+    ctx.arc(shoulder.x, shoulder.y, 0.076, 1.85, 4.35, false);
+    ctx.stroke();
 
     final lower = _sculptedLimbPath(
       elbow,
@@ -859,42 +865,48 @@ class WarriorPainter {
     Vec2 end,
     double handAngle,
   ) {
-    // Deltoid shoulder cap inside the cuirass armhole
-    _fillCircle(ctx, shoulder.x, shoulder.y, 0.074, Palette.ink);
-
-    // Sculpted upper arm (bicep and tricep contour)
+    // Sculpted upper arm emerging from behind the back of the cuirass
     final upper = _sculptedLimbPath(
       shoulder,
       elbow,
-      startFront: 0.070,
-      startBack: 0.070,
-      midFront: 0.078,
-      midBack: 0.068,
-      endFront: 0.052,
-      endBack: 0.055,
+      startFront: 0.066,
+      startBack: 0.066,
+      midFront: 0.074,
+      midBack: 0.066,
+      endFront: 0.050,
+      endBack: 0.052,
     );
     _fillShadowed(ctx, upper, Palette.ink);
 
     // Rounded olecranon elbow joint
-    _fillCircle(ctx, elbow.x, elbow.y, 0.052, Palette.ink);
+    _fillCircle(ctx, elbow.x, elbow.y, 0.050, Palette.ink);
 
     // Sculpted forearm (brachioradialis swell tapering to the wrist)
     final lower = _sculptedLimbPath(
       elbow,
       end,
-      startFront: 0.058,
-      startBack: 0.058,
-      midFront: 0.064,
-      midBack: 0.056,
+      startFront: 0.056,
+      startBack: 0.056,
+      midFront: 0.062,
+      midBack: 0.054,
       endFront: 0.042,
       endBack: 0.042,
     );
     _fillShadowed(ctx, lower, Palette.ink);
 
-    // Cream wrist band just below the fist
+    // Cream elbow joint crease and wrist band matching ref2.png
     final d = (end - elbow).normalized;
     final p = d.perp;
     ctx.strokeStyle = Palette.cream;
+    ctx.lineWidth = 0.010;
+    ctx.beginPath();
+    final elbowA = elbow + d * 0.036 + p * 0.048;
+    final elbowCtrl = elbow - d * 0.018;
+    final elbowB = elbow + d * 0.036 - p * 0.048;
+    ctx.moveTo(elbowA.x, elbowA.y);
+    ctx.quadraticCurveTo(elbowCtrl.x, elbowCtrl.y, elbowB.x, elbowB.y);
+    ctx.stroke();
+
     ctx.lineWidth = 0.011;
     ctx.beginPath();
     ctx.moveTo(

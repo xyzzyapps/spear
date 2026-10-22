@@ -31,6 +31,7 @@ class GameEvent {
     this.x = 0,
     this.y = 0,
     this.text,
+    this.playerAttacked,
   });
 
   final GameEventType type;
@@ -38,6 +39,7 @@ class GameEvent {
   final double x;
   final double y;
   final String? text;
+  final bool? playerAttacked;
 }
 
 /// Owns the two fighters, the bot brain, and the round / match state machine.
@@ -130,11 +132,22 @@ class Match {
     final botIntent = brain.decide(dt, bot, player, true);
     player.applyIntent(playerIntent, dt);
     bot.applyIntent(botIntent, dt);
-    playerIntent.clearEdges();
     botIntent.clearEdges();
 
     player.update(dt);
     bot.update(dt);
+
+    // If recovery, cooldown, or stun expired during player.update(dt), allow
+    // a buffered player attack to start immediately on this frame.
+    if (playerIntent.attackPressed &&
+        player.canAct &&
+        player.attackCooldown <= 0 &&
+        !player.isAttacking) {
+      player.startAttack();
+      playerIntent.consumeAttack();
+    } else {
+      playerIntent.stepBuffer(dt);
+    }
 
     // Resolve both attacks before applying either, so a simultaneous
     // exchange can produce a double K.O.
@@ -180,6 +193,7 @@ class Match {
             x: defender.x,
             y: 2.0,
             text: 'HIT',
+            playerAttacked: attacker.isPlayer,
           ),
         );
       case CombatOutcome.blocked:
@@ -191,6 +205,7 @@ class Match {
             x: defender.x,
             y: 2.0,
             text: 'BLOCK',
+            playerAttacked: attacker.isPlayer,
           ),
         );
       case CombatOutcome.parried:
@@ -203,6 +218,7 @@ class Match {
             x: defender.x,
             y: 2.0,
             text: 'PARRY',
+            playerAttacked: attacker.isPlayer,
           ),
         );
       case CombatOutcome.miss:

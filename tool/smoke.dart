@@ -22,7 +22,7 @@ void _check(bool condition, String message) {
 }
 
 Future<void> main() async {
-  print('Homer browser smoke test');
+  print('Spear browser smoke test');
   print('');
 
   final chrome = _findChrome();

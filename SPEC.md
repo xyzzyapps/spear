@@ -1,10 +1,10 @@
-# Homer / Spear - Software Requirements Specification
+# Spear - Software Requirements Specification
 
 Status: implemented, verified locally against Chromium and the Dart VM.
 
 ## 1. Overview
 
-Homer is a Dart web game: a player-versus-bot papercut hoplite duel. The
+Spear is a Dart web game: a player-versus-bot papercut hoplite duel. The
 player controls the red-crested warrior on the left; the bot controls the
 white-crested warrior on the right. The game is a static site, has no runtime
 dependencies, and is shaped for an X Player Card at 480x270 while remaining
@@ -393,22 +393,22 @@ root is at the ground; the right warrior is mirrored. Key local points:
 | Point | Local coordinate |
 | --- | --- |
 | Hip | (0, 1.06 - crouch) |
-| Spear shoulder | (-0.04, hip.y + 0.78) |
-| Shield shoulder | (0.08, hip.y + 0.76) |
+| Spear shoulder | (-0.08, hip.y + 0.76) |
+| Shield shoulder | (-0.01, hip.y + 0.70) |
 | Head centre | (0.06, hip.y + 1.24) |
 | Back hip | (-0.16, hip.y) |
 | Front hip | (0.06, hip.y) |
 | Back foot | (-0.75, 0.08) |
 | Front foot | (0.45, 0.08) |
-| Left shield centre | hand + (0.25, 0.08) |
+| Left shield centre | hand + (0.25, 0.03) |
 | Shield radius left | 0.50 |
-| Shield radius right | 0.68 |
+| Shield radius right | 0.65 |
 
 The rig uses sculpted anatomical chains:
 
 | Chain | Joints | Lengths |
 | --- | --- | --- |
-| Spear arm | shoulder, elbow, wrist, fist | 0.38 / 0.44, fist 0.136 |
+| Spear arm | shoulder, elbow, wrist, fist | 0.29 / 0.51, fist 0.136 |
 | Shield arm | shoulder, elbow, wrist, hand | 0.34 / 0.34 |
 | Legs | hip, knee, ankle, foot | 0.55 / 0.57 |
 | Neck | shoulder collar to rotating helmet nape/throat | dynamic bezier |
@@ -422,9 +422,10 @@ lunges.
 
 The spear arm uses `_solveSpearArm` to keep the elbow on the anatomical
 lower-posterior side (`score = y + 0.35 * x`), forming the classic V-bent
-overhand dory stance in idle/windup and driving the forearm forward and up on
-the thrust without ever flipping the elbow above the shoulder. The grip sits
-0.015 units below the reachable hand so the palm wraps over the shaft.
+overhand dory stance in idle/windup (emerging from behind the upper back of the
+cuirass with the forearm sloping up-and-back to the spear grip) and driving
+forward on the thrust without flipping the elbow above the shoulder. The grip
+sits 0.015 units below the reachable hand so the palm wraps over the shaft.
 
 The neck is a dynamic quadratic bezier column connecting the shoulder collar to
 the rotating helmet nape and throat attachment points, flexing naturally with
@@ -433,26 +434,28 @@ flared neck guard, pointed cheek guard, nasal projection, almond eye slot,
 cream contour lines, and a high-arched horsehair crest with fine hair
 striations.
 
-The cuirass has a cream-rimmed shoulder cutout, waist boss fastener, segmented
-belt, diagonal scabbard with cream chape bindings, and 6 layered pteruges strips
+The cuirass has a cream collar rim, waist boss fastener, segmented belt,
+diagonal scabbard with cream chape bindings, and 6 layered pteruges strips
 that swing with the torso lean.
 
-Draw order, back to front:
+Draw order, back to front (matching `ref2.png`):
 
 1. Back leg (thigh, foot, contoured bronze greave).
 2. Front leg (thigh, foot, contoured bronze greave).
-3. Shield arm (behind the torso and shield).
-4. Sword scabbard and layered pteruges skirt.
-5. Torso cuirass, armhole plate, cream shoulder ring, and segmented belt.
-6. Spear shaft with tapered rear sauroter and leaf spearhead with socket collar,
-   central spine ridge, and blood stain (drawn before the head and shield so
-   each warrior's spear passes behind their own helmet and shield).
-7. Articulated bezier neck and collar line.
+3. Spear shaft with tapered rear sauroter and leaf spearhead with socket collar,
+   central spine ridge, and blood stain.
+4. Far spear arm (bicep/tricep emerging from behind the upper back, elbow with
+   cream joint crease, forearm, cream wrist band, and overhand fist wrapping
+   around the spear shaft).
+5. Sword scabbard and layered pteruges skirt.
+6. Articulated bezier neck.
+7. Torso cuirass, cream collar rim, boss fastener, and segmented belt.
 8. High-arched crest and Corinthian helmet.
-9. Shield: outer rim, inner field gradient, dot ring, rosette or lambda;
-   blood splats if the shield was hit.
-10. Near spear arm (deltoid cap, bicep/tricep, elbow, forearm, cream wrist band,
-    and overhand fist).
+9. Near shield arm (deltoid cap inside the cuirass shoulder socket with cream
+   posterior cutout trim, upper arm angling down-and-forward across the front of
+   the cuirass, elbow, and forearm into the back of the shield).
+10. Shield: outer rim, inner field gradient, dot ring, rosette or lambda;
+    blood splats if the shield was hit.
 
 Each shape gets a manual paper shadow offset by roughly (2, 3) reference pixels
 in screen space, so the light direction stays consistent when the right warrior

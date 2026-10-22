@@ -88,7 +88,7 @@ class Game {
 
   void pressAttack() {
     if (started) {
-      _playerIntent.attackPressed = true;
+      _playerIntent.queueAttack();
     }
   }
 

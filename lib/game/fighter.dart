@@ -20,7 +20,7 @@ const double attackWindup = 0.18;
 const double attackActive = 0.12;
 const double attackRecovery = 0.35;
 const double attackTotal = attackWindup + attackActive + attackRecovery;
-const double attackCooldownTime = 0.70;
+const double attackCooldownTime = attackTotal;
 const double attackRange = 3.25;
 const double parryWindow = 0.15;
 const double hitStun = 0.25;
@@ -210,8 +210,9 @@ class Fighter {
       return;
     }
 
-    if (intent.attackPressed && canAct && attackCooldown <= 0) {
+    if (intent.attackPressed && canAct && attackCooldown <= 0 && !isAttacking) {
       startAttack();
+      intent.consumeAttack();
       return;
     }
 

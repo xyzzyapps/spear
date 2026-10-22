@@ -12,7 +12,7 @@ import '../test/math_test.dart';
 import '../test/pose_test.dart';
 
 void main() {
-  print('Homer test suite');
+  print('Spear test suite');
   print('');
   runMathTests();
   runFighterTests();

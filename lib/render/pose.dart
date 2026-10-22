@@ -112,11 +112,13 @@ PoseParams poseFor(Fighter fighter, double time) {
     case FighterState.recover:
       _applyWindup(pose, 1);
       _applyThrust(pose, 1);
-      return PoseParams.between(
-        pose,
-        basePose(),
-        easeInOutCubic(math.min(1, fighter.stateTime / attackRecovery)),
+      const hold = 0.06;
+      final t = clamp(
+        (fighter.stateTime - hold) / (attackRecovery - hold),
+        0,
+        1,
       );
+      return PoseParams.between(pose, basePose(), easeInOutCubic(t));
     case FighterState.block:
       final k = smoothstep(math.min(1, fighter.stateTime / 0.12));
       pose.crouch += 0.075 * k;

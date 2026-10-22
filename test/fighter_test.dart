@@ -139,4 +139,24 @@ void runFighterTests() {
     fighter.applyIntent(FighterIntent()..attackPressed = true, 1 / 60);
     expectEq(fighter.state, FighterState.idle);
   });
+
+  test('buffered attack fires immediately when recovery finishes', () {
+    final fighter = makeFighter();
+    fighter.startAttack();
+    fighter.update(attackWindup);
+    fighter.update(attackActive);
+    fighter.update(attackRecovery - 0.05);
+    expectEq(fighter.state, FighterState.recover);
+
+    final intent = FighterIntent()..queueAttack();
+    fighter.applyIntent(intent, 0.02);
+    intent.stepBuffer(0.02);
+    expectTrue(intent.attackPressed);
+
+    fighter.update(0.06);
+    expectEq(fighter.state, FighterState.idle);
+    fighter.applyIntent(intent, 0.02);
+    expectEq(fighter.state, FighterState.windup);
+    expectFalse(intent.attackPressed);
+  });
 }
